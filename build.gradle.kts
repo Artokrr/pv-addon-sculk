@@ -12,7 +12,7 @@ group = mavenGroup
 version = buildVersion
 
 dependencies {
-    compileOnly("su.plo.voice.api:server:2.0.0+ALPHA")
+    compileOnly("su.plo.voice.api:server:2.0.3")
 
     annotationProcessor("org.projectlombok:lombok:1.18.24")
 }

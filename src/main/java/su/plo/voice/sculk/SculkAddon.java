@@ -15,6 +15,7 @@ import su.plo.voice.api.event.EventPriority;
 import su.plo.voice.api.event.EventSubscribe;
 import su.plo.voice.api.server.PlasmoVoiceServer;
 import su.plo.voice.api.server.audio.capture.ServerActivation;
+import su.plo.voice.api.server.event.audio.source.PlayerSpeakEndEvent;
 import su.plo.voice.api.server.event.audio.source.PlayerSpeakEvent;
 import su.plo.voice.api.server.event.config.VoiceServerConfigReloadedEvent;
 import su.plo.voice.api.server.event.connection.UdpClientDisconnectedEvent;
@@ -22,11 +23,27 @@ import su.plo.voice.api.server.player.VoiceServerPlayer;
 import su.plo.voice.api.util.AudioUtil;
 import su.plo.voice.proto.data.audio.codec.CodecInfo;
 
+import javax.sound.sampled.AudioFileFormat;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Addon(id = "pv-addon-sculk", scope = AddonLoaderScope.SERVER, version = "1.0.0", authors = {"Apehum"})
 public final class SculkAddon implements AddonInitializer {
@@ -34,7 +51,10 @@ public final class SculkAddon implements AddonInitializer {
     private static final ConfigurationProvider toml = ConfigurationProvider.getProvider(TomlConfiguration.class);
 
     private final Map<String, AudioDecoder> decoders = Maps.newHashMap();
+    private Path voiceChatRecordsDirectory;
     private final Map<UUID, Long> lastActivationByPlayerId = Maps.newConcurrentMap();
+    private final Map<UUID, List<short[]>> audioBuffers = new ConcurrentHashMap<>();
+
 
     @Inject
     private PlasmoVoiceServer voiceServer;
@@ -42,6 +62,14 @@ public final class SculkAddon implements AddonInitializer {
 
     @Override
     public void onAddonInitialize() {
+        try {
+            voiceChatRecordsDirectory = Paths.get(voiceServer.getConfigsFolder().getPath(), "voice_chat_records");
+            if (!Files.exists(voiceChatRecordsDirectory)) {
+                Files.createDirectories(voiceChatRecordsDirectory);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create voice_chat_records directory", e);
+        }
         loadConfig();
     }
 
@@ -89,7 +117,7 @@ public final class SculkAddon implements AddonInitializer {
             e.printStackTrace();
             return;
         }
-
+        audioBuffers.computeIfAbsent(player.getInstance().getUUID(), k -> new ArrayList<>()).add(decoded);
         if (!AudioUtil.containsMinAudioLevel(decoded, config.activationThreshold())) return;
 
         lastActivationByPlayerId.put(player.getInstance().getUUID(), System.currentTimeMillis());
@@ -98,6 +126,51 @@ public final class SculkAddon implements AddonInitializer {
                 player.getInstance(),
                 config.gameEvent()
         );
+    }
+
+    @EventSubscribe(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onPlayerSpeakEnd(@NotNull PlayerSpeakEndEvent event) {
+        var player = event.getPlayer();
+        UUID playerId = player.getInstance().getUUID();
+
+        // Get the buffer for this player
+        List<short[]> buffer = audioBuffers.get(playerId);
+        if (buffer == null) {
+            // This should never happen if a PlayerSpeakEndEvent is always preceded by a PlayerSpeakEvent
+            System.err.println("No audio data for player " + playerId);
+            return;
+        }
+
+        // Convert the buffer list to an array
+        int totalLength = buffer.stream().mapToInt(arr -> arr.length).sum();
+        short[] allAudioData = new short[totalLength];
+
+        int currentIndex = 0;
+        for (short[] array : buffer) {
+            System.arraycopy(array, 0, allAudioData, currentIndex, array.length);
+            currentIndex += array.length;
+        }
+        // Write the buffer to a file and clear it
+        int sampleRate = voiceServer.getConfig().voice().sampleRate();
+        Instant timestamp = Instant.ofEpochMilli(System.currentTimeMillis());
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss").withZone(ZoneId.of("Europe/Moscow"));
+        String formattedDate = formatter.format(timestamp);
+        writeAudioToWav(allAudioData, player.getInstance().getName() + "_" + formattedDate + ".wav", sampleRate);
+        buffer.clear();
+    }
+
+
+    private void writeAudioToWav(short[] audioData, String filename, int sampleRate) {
+        AudioFormat format = new AudioFormat(sampleRate, 16, 1, true, false);
+        byte[] byteData = new byte[audioData.length * 2];
+        ByteBuffer.wrap(byteData).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(audioData);
+        try {
+            AudioInputStream stream = new AudioInputStream(new ByteArrayInputStream(byteData), format, audioData.length);
+            File outputFile = voiceChatRecordsDirectory.resolve(filename).toFile();
+            AudioSystem.write(stream, AudioFileFormat.Type.WAVE, outputFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private void loadConfig() {

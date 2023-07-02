@@ -17,3 +17,4 @@
 Server-side [Plasmo Voice](https://modrinth.com/mod/plasmo-voice) add-on.
 
 With this add-on, warden and sculk sensors are triggered with proximity voice chat.
+Added audio packets catching, decoding and saving as .wav files

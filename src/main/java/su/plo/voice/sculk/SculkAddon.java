@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Addon(id = "pv-addon-sculk", scope = AddonLoaderScope.SERVER, version = "1.0.0", authors = {"Apehum"})
 public final class SculkAddon implements AddonInitializer {
@@ -53,7 +54,7 @@ public final class SculkAddon implements AddonInitializer {
     private final Map<String, AudioDecoder> decoders = Maps.newHashMap();
     private Path voiceChatRecordsDirectory;
     private final Map<UUID, Long> lastActivationByPlayerId = Maps.newConcurrentMap();
-    private final Map<UUID, List<short[]>> audioBuffers = new ConcurrentHashMap<>();
+    private final Map<UUID, ConcurrentLinkedQueue<short[]>> audioBuffers = new ConcurrentHashMap<>();
 
 
     @Inject
@@ -117,7 +118,7 @@ public final class SculkAddon implements AddonInitializer {
             e.printStackTrace();
             return;
         }
-        audioBuffers.computeIfAbsent(player.getInstance().getUUID(), k -> new ArrayList<>()).add(decoded);
+        audioBuffers.computeIfAbsent(player.getInstance().getUUID(), k -> new ConcurrentLinkedQueue<>()).add(decoded);
         if (!AudioUtil.containsMinAudioLevel(decoded, config.activationThreshold())) return;
 
         lastActivationByPlayerId.put(player.getInstance().getUUID(), System.currentTimeMillis());
@@ -134,21 +135,27 @@ public final class SculkAddon implements AddonInitializer {
         UUID playerId = player.getInstance().getUUID();
 
         // Get the buffer for this player
-        List<short[]> buffer = audioBuffers.get(playerId);
+        ConcurrentLinkedQueue<short[]> buffer = audioBuffers.get(playerId);
         if (buffer == null) {
             // This should never happen if a PlayerSpeakEndEvent is always preceded by a PlayerSpeakEvent
             System.err.println("No audio data for player " + playerId);
             return;
         }
 
+        List<short[]> allAudioDataList = new ArrayList<>();
+        short[] array;
+        while ((array = buffer.poll()) != null) {
+            allAudioDataList.add(array);
+        }
+
         // Convert the buffer list to an array
-        int totalLength = buffer.stream().mapToInt(arr -> arr.length).sum();
+        int totalLength = allAudioDataList.stream().mapToInt(arr -> arr.length).sum();
         short[] allAudioData = new short[totalLength];
 
         int currentIndex = 0;
-        for (short[] array : buffer) {
-            System.arraycopy(array, 0, allAudioData, currentIndex, array.length);
-            currentIndex += array.length;
+        for (short[] audioData : allAudioDataList) {
+            System.arraycopy(audioData, 0, allAudioData, currentIndex, audioData.length);
+            currentIndex += audioData.length;
         }
         // Write the buffer to a file and clear it
         int sampleRate = voiceServer.getConfig().voice().sampleRate();
@@ -161,7 +168,7 @@ public final class SculkAddon implements AddonInitializer {
 
 
     private void writeAudioToWav(short[] audioData, String filename, int sampleRate) {
-        AudioFormat format = new AudioFormat(sampleRate, 16, 1, true, false);
+        AudioFormat format = new AudioFormat(sampleRate, 16, 1, false, false);
         byte[] byteData = new byte[audioData.length * 2];
         ByteBuffer.wrap(byteData).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(audioData);
         try {
@@ -196,7 +203,6 @@ public final class SculkAddon implements AddonInitializer {
                 .orElseGet(() -> new CodecInfo("opus", Maps.newHashMap()));
 
         var codecName = encoderInfo.getName() + (isStereo ? "_stereo" : "_mono");
-
         var decoder = decoders.computeIfAbsent(
                 codecName,
                 (codec) -> {

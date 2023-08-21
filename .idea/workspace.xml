@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="d25223ae-cc90-4d93-8310-31b53389302d" name="Changes" comment="">
+    <list default="true" id="d25223ae-cc90-4d93-8310-31b53389302d" name="Changes" comment="Updated concurrency">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/su/plo/voice/sculk/SculkAddon.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/su/plo/voice/sculk/SculkAddon.java" afterDir="false" />
     </list>
@@ -222,11 +222,38 @@
       <workItem from="1691658013443" duration="4190000" />
       <workItem from="1691743364904" duration="1237000" />
       <workItem from="1691761362409" duration="3498000" />
-      <workItem from="1692002276266" duration="9480000" />
+      <workItem from="1692002276266" duration="12347000" />
+      <workItem from="1692179396495" duration="44000" />
+      <workItem from="1692187440599" duration="716000" />
+      <workItem from="1692608619523" duration="1247000" />
     </task>
+    <task id="LOCAL-00001" summary="Updated concurrency">
+      <option name="closed" value="true" />
+      <created>1692018396895</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1692018396895</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Updated concurrency" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated concurrency" />
   </component>
 </project>

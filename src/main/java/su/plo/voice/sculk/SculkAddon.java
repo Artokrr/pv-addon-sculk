@@ -107,7 +107,7 @@ public final class SculkAddon implements AddonInitializer {
         if (!config.sneakActivation() && player.getInstance().isSneaking()) return;
 
         var lastActivation = lastActivationByPlayerId.getOrDefault(player.getInstance().getUUID(), 0L);
-        if (System.currentTimeMillis() - lastActivation < 500L) return;
+
 
         var packet = event.getPacket();
 
@@ -119,6 +119,7 @@ public final class SculkAddon implements AddonInitializer {
             return;
         }
         audioBuffers.computeIfAbsent(player.getInstance().getUUID(), k -> new ConcurrentLinkedQueue<>()).add(decoded);
+        if (System.currentTimeMillis() - lastActivation < 500L) return;
         if (!AudioUtil.containsMinAudioLevel(decoded, config.activationThreshold())) return;
 
         lastActivationByPlayerId.put(player.getInstance().getUUID(), System.currentTimeMillis());
